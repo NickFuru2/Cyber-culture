@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-white font-body select-none;
+    background-image: linear-gradient(0deg, transparent 24%, rgba(0, 224, 255, 0.05) 25%, rgba(0, 224, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 224, 255, 0.05) 75%, rgba(0, 224, 255, 0.05) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(0, 224, 255, 0.05) 25%, rgba(0, 224, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 224, 255, 0.05) 75%, rgba(0, 224, 255, 0.05) 76%, transparent 77%, transparent);
+    background-size: 50px 50px;
+    overflow-x: hidden;
+  }
+  
+  input, textarea {
+    @apply select-text;
+  }
+}
+
+@keyframes page-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-enter {
+  animation: page-enter 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.glass-panel {
+  background-color: rgba(22, 27, 34, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.glow-hover:hover {
+  box-shadow: 0 0 15px rgba(0, 224, 255, 0.3);
+  border-color: rgba(0, 224, 255, 0.6);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.2); 
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 224, 255, 0.3); 
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 224, 255, 0.6); 
+}
+
+@keyframes slideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
