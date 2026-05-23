@@ -140,11 +140,34 @@ const catColorMap = {
 
 export default function Textbooks() {
   const agentInfo = useStore(s => s.agentInfo);
+  const addXp = useStore(s => s.addXp);
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('ALL');
   const [diffFilter, setDiffFilter] = useState('ALL');
   const [expandedId, setExpandedId] = useState(null);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
+  const [bookProgress, setBookProgress] = useState({});
+
+  const handleReadChapter = (bookId, chapterIndex, book) => {
+    const currentProgress = bookProgress[bookId] || book.progress;
+    const chaptersCount = book.chapters.length;
+    const progressPerChapter = 100 / chaptersCount;
+    const newProgress = Math.min(100, Math.round((chapterIndex + 1) * progressPerChapter));
+
+    if (newProgress > currentProgress) {
+      setBookProgress(prev => ({ ...prev, [bookId]: newProgress }));
+
+      // Award XP based on difficulty
+      const xpRewards = {
+        'BEGINNER': 20,
+        'INTERMEDIATE': 30,
+        'ADVANCED': 50,
+        'ELITE': 75
+      };
+      const xpAmount = xpRewards[book.difficulty] || 30;
+      addXp(xpAmount, 'textbook', `${book.title} (Ch.${chapterIndex + 1})`);
+    }
+  };
 
   const filtered = useMemo(() => {
     return BOOKS.filter(b => {
@@ -281,10 +304,10 @@ export default function Textbooks() {
                     <div className="mt-auto">
                       <div className="flex justify-between text-[10px] font-code text-gray-500 mb-1">
                         <span>PROGRESS</span>
-                        <span className={book.progress >= 100 ? 'text-secondary-container' : cs.text}>{book.progress}%</span>
+                        <span className={(bookProgress[book.id] || book.progress) >= 100 ? 'text-secondary-container' : cs.text}>{bookProgress[book.id] || book.progress}%</span>
                       </div>
                       <div className="w-full h-1.5 bg-surface-variant/50 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-1000 ${book.progress >= 100 ? 'bg-secondary-container shadow-[0_0_8px_rgba(195,244,0,0.6)]' : book.progress > 0 ? 'bg-cyan-400 shadow-[0_0_6px_rgba(0,224,255,0.4)]' : ''}`} style={{ width: `${book.progress}%` }}></div>
+                        <div className={`h-full rounded-full transition-all duration-1000 ${(bookProgress[book.id] || book.progress) >= 100 ? 'bg-secondary-container shadow-[0_0_8px_rgba(195,244,0,0.6)]' : (bookProgress[book.id] || book.progress) > 0 ? 'bg-cyan-400 shadow-[0_0_6px_rgba(0,224,255,0.4)]' : ''}`} style={{ width: `${bookProgress[book.id] || book.progress}%` }}></div>
                       </div>
                     </div>
                   )}
@@ -322,13 +345,22 @@ export default function Textbooks() {
                   <div className="border-t border-white/5 bg-black/30 p-4 space-y-2" style={{ animation: 'fadeIn 0.3s ease-out' }}>
                     <div className="font-code text-[10px] text-gray-500 tracking-widest mb-2">TABLE OF CONTENTS</div>
                     {book.chapters.map((ch, i) => {
-                      const chProgress = book.progress > 0 ? (i < Math.ceil(book.chapters.length * (book.progress / 100))) : false;
+                      const currentProgress = bookProgress[book.id] || book.progress;
+                      const chProgress = currentProgress > 0 ? (i < Math.ceil(book.chapters.length * (currentProgress / 100))) : false;
                       return (
-                        <div key={i} className={`flex items-center gap-2 p-2 border ${chProgress ? 'border-cyan-500/20 bg-cyan-400/5' : 'border-surface-variant/30'} transition-all hover:bg-white/[0.02] cursor-default`}>
+                        <button
+                          key={i}
+                          onClick={() => book.unlocked && handleReadChapter(book.id, i, book)}
+                          disabled={!book.unlocked}
+                          className={`w-full flex items-center gap-2 p-2 border ${chProgress ? 'border-cyan-500/20 bg-cyan-400/5' : 'border-surface-variant/30'} transition-all hover:bg-white/[0.02] ${book.unlocked ? 'cursor-pointer hover:border-cyan-500/40' : 'cursor-not-allowed opacity-50'}`}
+                        >
                           <span className="font-code text-[10px] text-gray-600 w-5">{String(i + 1).padStart(2, '0')}</span>
                           {chProgress ? <CheckCircle size={12} className="text-cyan-400 flex-shrink-0" /> : <div className="w-3 h-3 border border-gray-600 rounded-full flex-shrink-0"></div>}
-                          <span className={`font-code text-xs ${chProgress ? 'text-white' : 'text-gray-500'}`}>{ch}</span>
-                        </div>
+                          <span className={`font-code text-xs ${chProgress ? 'text-white' : 'text-gray-500'} flex-1 text-left`}>{ch}</span>
+                          {book.unlocked && !chProgress && (
+                            <Zap size={12} className="text-secondary-container opacity-0 group-hover:opacity-100 transition-opacity" />
+                          )}
+                        </button>
                       );
                     })}
                   </div>

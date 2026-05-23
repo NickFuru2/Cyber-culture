@@ -1,22 +1,25 @@
 {
   "name": "cyber-ops-backend",
-  "version": "1.0.0",
-  "description": "Cyber-Ops Training Platform — Backend API Server",
+  "version": "5.0.0",
+  "description": "Cyber-Ops Training Platform — Backend API Server (Supabase PostgreSQL)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
-  "keywords": ["cybersecurity", "gamification", "training"],
+  "keywords": ["cybersecurity", "gamification", "training", "supabase", "postgresql"],
   "author": "",
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.9.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3"
   }
 }

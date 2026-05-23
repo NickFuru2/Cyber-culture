@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
+import { playSound } from '../utils/audio';
 import {
   Trophy, Target, Award, Activity, Shield, Crosshair, Cpu, Wifi,
   AlertTriangle, TrendingUp, Zap, Eye, Terminal, Server, Clock,
@@ -40,7 +41,13 @@ function ProgressRing({ radius, stroke, progress, color = '#00e0ff' }) {
 export default function Dashboard() {
   const agentInfo = useStore(state => state.agentInfo);
   const unlockedSkills = useStore(state => state.unlockedSkills);
+  const leaderboard = useStore(state => state.leaderboard);
+  const loadLeaderboard = useStore(state => state.loadLeaderboard);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    loadLeaderboard();
+  }, [loadLeaderboard]);
 
   const heatmap = useMemo(generateHeatmap, []);
 
@@ -246,24 +253,24 @@ export default function Dashboard() {
               <Trophy size={16} className="group-hover:scale-110 group-hover:text-cyan-300 transition-all"/> GLOBAL LEADERBOARD
             </header>
             <div className="p-4 flex flex-col gap-2">
-              {[
-                { rank: '#1', name: 'Neo', xp: '99,999', highlight: true },
-                { rank: '#2', name: 'Trinity', xp: '85,420', highlight: false },
-                { rank: '#3', name: 'Morpheus', xp: '72,100', highlight: false },
-              ].map((p, i) => (
-                <div key={i} className={`flex justify-between items-center p-3 border ${i === 0 ? 'border-cyan-500/30 bg-cyan-400/10' : 'border-surface-variant bg-surface-variant/30'} hover:scale-[1.03] hover:bg-cyan-400/15 transition-all cursor-default`}>
-                  <div className="flex items-center gap-4">
-                    <span className={`font-code font-bold ${i === 0 ? 'text-cyan-400 drop-shadow-[0_0_5px_rgba(0,224,255,0.8)]' : 'text-gray-400'}`}>{p.rank}</span>
-                    <span className="font-code text-white">{p.name}</span>
+              {leaderboard.length === 0 ? (
+                <div className="text-gray-500 font-code text-xs text-center py-6 animate-pulse">[ ESTABLISHING DATA UPLINK... ]</div>
+              ) : (
+                leaderboard.slice(0, 3).map((p, i) => (
+                  <div key={i} className={`flex justify-between items-center p-3 border ${i === 0 ? 'border-cyan-500/30 bg-cyan-400/10' : 'border-surface-variant bg-surface-variant/30'} hover:scale-[1.03] hover:bg-cyan-400/15 transition-all cursor-default`}>
+                    <div className="flex items-center gap-4">
+                      <span className={`font-code font-bold ${i === 0 ? 'text-cyan-400 drop-shadow-[0_0_5px_rgba(0,224,255,0.8)]' : 'text-gray-400'}`}>#{i + 1}</span>
+                      <span className="font-code text-white">{p.username}</span>
+                    </div>
+                    <span className="font-code text-secondary-container">{p.pvp_elo} ELO</span>
                   </div>
-                  <span className="font-code text-secondary-container">{p.xp} XP</span>
-                </div>
-              ))}
+                ))
+              )}
               {/* You */}
               <div className="flex justify-between items-center p-3 border border-dashed border-cyan-500/30 mt-2 opacity-80 hover:opacity-100 hover:scale-[1.03] hover:bg-cyan-900/20 transition-all cursor-default">
                 <div className="flex items-center gap-4">
-                  <span className="font-code text-cyan-400 font-bold">#142</span>
-                  <span className="font-code text-cyan-400 drop-shadow-[0_0_5px_rgba(0,224,255,0.5)]">{agentInfo.username} (YOU)</span>
+                  <span className="font-code text-cyan-400 font-bold">#YOU</span>
+                  <span className="font-code text-cyan-400 drop-shadow-[0_0_5px_rgba(0,224,255,0.5)]">{agentInfo.username}</span>
                 </div>
                 <span className="font-code text-secondary-container">{agentInfo.xp} XP</span>
               </div>

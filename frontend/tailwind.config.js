@@ -8,13 +8,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        "background": "#10141a",
-        "surface-variant": "#31353c",
-        "primary": "#baf2ff",
-        "primary-fixed": "#a5eeff",
-        "secondary-container": "#c3f400",
-        "error": "#ffb4ab",
-        "error-container": "#93000a",
+        "background": "var(--color-background, #10141a)",
+        "surface-variant": "var(--color-surface-variant, #31353c)",
+        "primary": "var(--color-primary, #baf2ff)",
+        "primary-fixed": "var(--color-primary-fixed, #a5eeff)",
+        "secondary-container": "var(--color-secondary-container, #c3f400)",
+        "error": "var(--color-error, #ffb4ab)",
+        "error-container": "var(--color-error-container, #93000a)",
       },
       fontFamily: {
         "h1": ["Space Grotesk", "sans-serif"],

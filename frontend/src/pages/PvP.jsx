@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Swords, Shield, Zap, Trophy, TrendingUp, Users, Eye, Skull, Crown, ChevronUp, ChevronDown, Star, Target, Activity, Power, Search } from 'lucide-react';
+import { Swords, Shield, Zap, Trophy, TrendingUp, Users, Eye, Skull, Crown, ChevronUp, ChevronDown, Star, Target, Activity, Power, Search, AlertTriangle, Play, HelpCircle } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { playSound } from '../utils/audio';
 
 // ── PvP Rank Tiers ──
 const RANKS = [
@@ -38,8 +39,24 @@ export default function PvP() {
   const pvpEnabled = useStore(s => s.pvpEnabled);
   const togglePvp = useStore(s => s.togglePvp);
   const pvpStats = useStore(s => s.pvpStats);
+  const leaderboard = useStore(s => s.leaderboard);
+  const loadLeaderboard = useStore(s => s.loadLeaderboard);
+  const pvpDuel = useStore(s => s.pvpDuel);
+
   const [searching, setSearching] = useState(false);
   const [tab, setTab] = useState('overview'); // overview | history | leaderboard
+
+  // Duel Specific States
+  const [duelState, setDuelState] = useState('none'); // none | ready | fighting | finished
+  const [opponent, setOpponent] = useState(null); // { username, elo }
+  const [attack, setAttack] = useState('SQLi'); // SQLi | DDoS | Overflow
+  const [defense, setDefense] = useState('WAF'); // WAF | IPS | IDS
+  const [duelResult, setDuelResult] = useState(null); // result data from api
+
+  // Load leaderboard on mount
+  useEffect(() => {
+    loadLeaderboard();
+  }, [loadLeaderboard]);
 
   const currentRank = useMemo(() => {
     return RANKS.find(r => pvpStats.elo >= r.min && pvpStats.elo <= r.max) || RANKS[0];
@@ -60,8 +77,51 @@ export default function PvP() {
 
   const handleSearch = () => {
     if (!pvpEnabled) return;
+    playSound.click();
     setSearching(true);
-    setTimeout(() => setSearching(false), 4000);
+    setDuelState('none');
+    
+    setTimeout(() => {
+      setSearching(false);
+      
+      // Select opponent from leaderboard that is not us
+      const realOpponents = leaderboard.filter(p => p.username !== agentInfo.username);
+      let selectedOpp = null;
+      if (realOpponents.length > 0) {
+        const idx = Math.floor(Math.random() * realOpponents.length);
+        selectedOpp = { username: realOpponents[idx].username, elo: realOpponents[idx].pvp_elo };
+      } else {
+        selectedOpp = { username: 'Dark_Net_Operative', elo: 1250 };
+      }
+      
+      setOpponent(selectedOpp);
+      setDuelState('ready');
+      playSound.confirm();
+    }, 3000);
+  };
+
+  const handleLaunchDuel = async () => {
+    if (duelState !== 'ready') return;
+    playSound.alarm();
+    setDuelState('fighting');
+    
+    // Execute duel call
+    setTimeout(async () => {
+      const result = await pvpDuel(opponent.username, attack, defense);
+      if (result) {
+        setDuelResult(result);
+        setDuelState('finished');
+        if (result.result === 'WIN') {
+          playSound.confirm();
+        } else {
+          playSound.alarm();
+        }
+        // Reload leaderboard
+        loadLeaderboard();
+      } else {
+        setDuelState('ready');
+      }
+    }, 2500);
   };
 
   return (
@@ -159,35 +219,173 @@ export default function PvP() {
             </div>
           </div>
 
-          {/* Matchmaking Card */}
-          <div className="glass-panel border border-cyan-500/15 p-5 flex flex-col gap-4">
-            <h3 className="font-code text-xs text-gray-400 tracking-widest border-b border-cyan-500/10 pb-2 flex items-center gap-2"><Search size={14} className="text-red-400" /> MATCHMAKING</h3>
-            <div className="flex-1 flex flex-col items-center justify-center gap-4">
-              {!pvpEnabled ? (
-                <div className="text-center">
-                  <Power size={48} className="text-gray-700 mx-auto mb-3" />
-                  <p className="font-code text-sm text-gray-500">PVP MODE DISABLED</p>
-                  <p className="font-body text-xs text-gray-600 mt-1">Включите PvP режим для поиска противника</p>
+          {/* Matchmaking Card OR Active Hacker Duel */}
+          <div className={`glass-panel border p-5 flex flex-col gap-4 transition-all duration-500 ${duelState !== 'none' ? 'border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.15)] bg-red-950/5' : 'border-cyan-500/15'}`}>
+            
+            {/* Header depending on state */}
+            {duelState === 'none' && (
+              <h3 className="font-code text-xs text-gray-400 tracking-widest border-b border-cyan-500/10 pb-2 flex items-center gap-2"><Search size={14} className="text-red-400" /> MATCHMAKING</h3>
+            )}
+            {duelState === 'ready' && (
+              <h3 className="font-code text-xs text-red-400 tracking-widest border-b border-red-500/30 pb-2 flex items-center gap-2 animate-pulse"><AlertTriangle size={14} /> ACTIVE THREAT DETECTED</h3>
+            )}
+            {duelState === 'fighting' && (
+              <h3 className="font-code text-xs text-yellow-400 tracking-widest border-b border-yellow-500/30 pb-2 flex items-center gap-2 animate-pulse"><Activity size={14} /> ENGAGING NODE...</h3>
+            )}
+            {duelState === 'finished' && (
+              <h3 className="font-code text-xs text-secondary-container tracking-widest border-b border-secondary-container/30 pb-2 flex items-center gap-2"><Trophy size={14} /> TRANSACTION COMPLETE</h3>
+            )}
+
+            <div className="flex-1 flex flex-col justify-center gap-4">
+              {/* STATE: NONE */}
+              {duelState === 'none' && (
+                <>
+                  {!pvpEnabled ? (
+                    <div className="text-center py-6">
+                      <Power size={48} className="text-gray-700 mx-auto mb-3" />
+                      <p className="font-code text-sm text-gray-500">PVP MODE DISABLED</p>
+                      <p className="font-body text-xs text-gray-600 mt-1">Включите PvP режим для поиска противника</p>
+                    </div>
+                  ) : searching ? (
+                    <div className="text-center py-6">
+                      <div className="w-16 h-16 rounded-full border-2 border-red-500 border-t-transparent animate-spin mx-auto mb-4 shadow-[0_0_20px_rgba(248,113,113,0.3)]"></div>
+                      <p className="font-code text-sm text-red-400 animate-pulse tracking-widest">SCANNING SHADOW GRID...</p>
+                      <p className="font-body text-xs text-gray-500 mt-1">Поиск противника в диапазоне {pvpStats.elo - 200}–{pvpStats.elo + 200} ELO</p>
+                      <button onClick={() => { setSearching(false); playSound.click(); }} className="mt-4 px-5 py-1.5 border border-gray-600 text-gray-400 font-code text-xs hover:border-red-500 hover:text-red-400 transition-all cursor-pointer">CANCEL</button>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6">
+                      <Swords size={48} className="text-red-400/40 mx-auto mb-3" />
+                      <p className="font-body text-xs text-gray-500 mb-4">Найди и атакуй вражеского агента</p>
+                      <button onClick={handleSearch}
+                        className="px-6 py-2.5 bg-red-500 text-white font-code text-xs tracking-widest font-bold hover:bg-red-400 hover:shadow-[0_0_30px_rgba(248,113,113,0.5)] active:scale-95 transition-all flex items-center gap-2 mx-auto cursor-pointer"
+                      >
+                        <Target size={14} /> FIND OPPONENT
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* STATE: READY (SELECTING ATTACK & DEFENSE) */}
+              {duelState === 'ready' && opponent && (
+                <div className="space-y-4 font-code text-xs">
+                  <div className="bg-red-950/20 border border-red-500/20 p-3 text-center">
+                    <span className="text-gray-500 tracking-widest text-[9px] block mb-1">TARGET LOCKED</span>
+                    <span className="text-white font-bold text-sm">{opponent.username}</span>
+                    <span className="text-red-400 font-bold block mt-0.5">{opponent.elo} ELO</span>
+                  </div>
+
+                  {/* Attack choice */}
+                  <div>
+                    <span className="text-gray-400 text-[10px] tracking-widest block mb-2 font-bold flex items-center gap-1"><Play size={10} className="rotate-90 text-red-500"/> ATTACK VECTOR</span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { id: 'SQLi', label: 'SQLi', tip: 'VS IDS' },
+                        { id: 'DDoS', label: 'DDoS', tip: 'VS WAF' },
+                        { id: 'Overflow', label: 'Overflow', tip: 'VS IPS' },
+                      ].map(opt => (
+                        <button 
+                          key={opt.id} 
+                          onClick={() => { setAttack(opt.id); playSound.click(); }}
+                          className={`p-2 border font-bold text-[10px] transition-all cursor-pointer ${attack === opt.id ? 'border-red-500 bg-red-500/10 text-white shadow-[0_0_10px_rgba(239,68,68,0.3)]' : 'border-surface-variant text-gray-500 hover:text-gray-300'}`}
+                        >
+                          <div>{opt.label}</div>
+                          <div className="text-[7px] opacity-60 font-normal">{opt.tip}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Defense choice */}
+                  <div>
+                    <span className="text-gray-400 text-[10px] tracking-widest block mb-2 font-bold flex items-center gap-1"><Shield size={10} className="text-cyan-400"/> DEFENSE BLOCK</span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { id: 'WAF', label: 'WAF', tip: 'BLOCK SQLi' },
+                        { id: 'IPS', label: 'IPS', tip: 'BLOCK DDoS' },
+                        { id: 'IDS', label: 'IDS', tip: 'BLOCK Over' },
+                      ].map(opt => (
+                        <button 
+                          key={opt.id} 
+                          onClick={() => { setDefense(opt.id); playSound.click(); }}
+                          className={`p-2 border font-bold text-[10px] transition-all cursor-pointer ${defense === opt.id ? 'border-cyan-500 bg-cyan-500/10 text-white shadow-[0_0_10px_rgba(0,224,255,0.3)]' : 'border-surface-variant text-gray-500 hover:text-gray-300'}`}
+                        >
+                          <div>{opt.label}</div>
+                          <div className="text-[7px] opacity-60 font-normal">{opt.tip}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button onClick={handleLaunchDuel} className="flex-1 py-2.5 bg-red-500 hover:bg-red-400 text-white font-bold tracking-widest shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all active:scale-95 cursor-pointer text-center flex items-center justify-center gap-2">
+                      <Swords size={14}/> DEPLOY EXPLOIT
+                    </button>
+                    <button onClick={() => { setDuelState('none'); playSound.click(); }} className="px-3 border border-gray-600 text-gray-400 hover:border-white hover:text-white transition-colors cursor-pointer text-[10px] font-bold">
+                      RETREAT
+                    </button>
+                  </div>
                 </div>
-              ) : searching ? (
-                <div className="text-center">
-                  <div className="w-20 h-20 rounded-full border-2 border-red-500 border-t-transparent animate-spin mx-auto mb-4 shadow-[0_0_20px_rgba(248,113,113,0.3)]"></div>
-                  <p className="font-code text-sm text-red-400 animate-pulse tracking-widest">SEARCHING...</p>
-                  <p className="font-body text-xs text-gray-500 mt-1">Поиск противника в диапазоне {pvpStats.elo - 200}–{pvpStats.elo + 200} ELO</p>
-                  <button onClick={() => setSearching(false)} className="mt-4 px-6 py-2 border border-gray-600 text-gray-400 font-code text-xs hover:border-red-500 hover:text-red-400 transition-all">CANCEL</button>
+              )}
+
+              {/* STATE: FIGHTING */}
+              {duelState === 'fighting' && (
+                <div className="text-center py-6 font-code text-xs space-y-4">
+                  <div className="w-12 h-12 rounded-full border-2 border-yellow-500 border-t-transparent animate-spin mx-auto mb-2 shadow-[0_0_20px_rgba(234,179,8,0.3)]"></div>
+                  <div className="space-y-1.5 text-left bg-black/60 p-3 rounded border border-yellow-500/25 text-[9px] text-yellow-500/80 custom-scrollbar max-h-32 overflow-y-auto">
+                    <div className="animate-pulse">_ EXECUTE PROTOCOL [SHADOW_BREACH]</div>
+                    <div>&gt; Attacking ports via {attack}...</div>
+                    <div>&gt; Establishing decoy nodes...</div>
+                    <div>&gt; Reinforcing defensive grid: {defense}...</div>
+                    <div className="animate-bounce">&gt; EXPLOITING CVE BUFFER SECURE HANDSHAKE...</div>
+                  </div>
                 </div>
-              ) : (
-                <div className="text-center">
-                  <Swords size={48} className="text-red-400/40 mx-auto mb-3" />
-                  <p className="font-body text-xs text-gray-500 mb-4">Найди и атакуй вражеского агента</p>
-                  <button onClick={handleSearch}
-                    className="px-8 py-3 bg-red-500 text-white font-code text-sm tracking-widest font-bold hover:bg-red-400 hover:shadow-[0_0_30px_rgba(248,113,113,0.5)] active:scale-95 transition-all flex items-center gap-2 mx-auto"
+              )}
+
+              {/* STATE: FINISHED (OUTCOME & LOOT) */}
+              {duelState === 'finished' && duelResult && (
+                <div className="space-y-4 font-code text-xs text-center">
+                  <div className={`p-4 border ${duelResult.result === 'WIN' ? 'border-secondary-container bg-secondary-container/5' : 'border-red-500 bg-red-500/5'} rounded`}>
+                    <span className="text-[9px] text-gray-500 tracking-widest block mb-1">DUEL RESULT</span>
+                    <span className={`text-xl font-bold tracking-widest drop-shadow-[0_0_10px_currentColor] ${duelResult.result === 'WIN' ? 'text-secondary-container' : 'text-red-400'}`}>
+                      {duelResult.result === 'WIN' ? 'BREACH SUCCESSFUL' : 'SYSTEM CRASH'}
+                    </span>
+                  </div>
+
+                  <div className="bg-black/40 border border-surface-variant p-3 rounded text-left text-[9px] text-gray-400 space-y-1 leading-relaxed">
+                    <div className="flex justify-between"><span>OPPONENT ACTION:</span><span className="text-white font-bold">ATT: {duelResult.oppChoice.attack} / DEF: {duelResult.oppChoice.defense}</span></div>
+                    <div className="flex justify-between"><span>YOUR OUTCOME:</span><span className={duelResult.result === 'WIN' ? 'text-secondary-container' : 'text-red-400'}>{duelResult.result}</span></div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="p-2 border border-cyan-500/20 bg-cyan-400/5 rounded">
+                      <span className="text-[8px] text-gray-500 block">ELO</span>
+                      <span className={`font-bold ${duelResult.eloChange > 0 ? 'text-secondary-container' : 'text-red-400'}`}>
+                        {duelResult.eloChange > 0 ? '+' : ''}{duelResult.eloChange}
+                      </span>
+                    </div>
+                    <div className="p-2 border border-secondary-container/20 bg-secondary-container/5 rounded">
+                      <span className="text-[8px] text-gray-500 block">XP Gained</span>
+                      <span className="text-secondary-container font-bold">+{duelResult.xpGain}</span>
+                    </div>
+                    <div className="p-2 border border-fuchsia-500/20 bg-fuchsia-400/5 rounded">
+                      <span className="text-[8px] text-gray-500 block">Credits</span>
+                      <span className="text-fuchsia-300 font-bold">+{duelResult.creditsGain}¤</span>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => { setDuelState('none'); setOpponent(null); setDuelResult(null); playSound.click(); }} 
+                    className="w-full py-2 bg-white hover:bg-gray-200 text-black font-bold tracking-widest transition-all active:scale-95 cursor-pointer text-center text-[10px]"
                   >
-                    <Target size={16} /> FIND OPPONENT
+                    RETURN TO SECURE SHADOWS
                   </button>
                 </div>
               )}
+
             </div>
+            
             <div className="flex items-center gap-2 font-code text-[10px] text-gray-600 border-t border-cyan-500/10 pt-3">
               <Users size={10} /> <span>Онлайн: <span className="text-cyan-400">2,847</span> агентов</span>
             </div>
@@ -227,39 +425,49 @@ export default function PvP() {
       {tab === 'leaderboard' && (
         <div className="glass-panel border border-cyan-500/15 p-5 flex-1">
           <div className="space-y-2">
-            {LEADERBOARD.map((p, i) => {
-              const rank = RANKS.find(r => p.elo >= r.min && p.elo <= r.max) || RANKS[0];
-              return (
-                <div key={p.rank} className={`flex items-center justify-between p-4 border transition-all hover:bg-white/[0.03] ${i === 0 ? 'border-yellow-500/30 bg-yellow-900/5' : i === 1 ? 'border-gray-400/20 bg-gray-500/5' : i === 2 ? 'border-amber-600/20 bg-amber-900/5' : 'border-white/5'}`}>
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 flex items-center justify-center font-code font-bold text-lg ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-gray-500'}`}>
-                      {i < 3 ? ['👑', '🥈', '🥉'][i] : `#${p.rank}`}
+            {leaderboard.length === 0 ? (
+              <div className="text-gray-500 font-code text-xs text-center py-12 animate-pulse">[ DATA STREAM SYNCHRONIZING... ]</div>
+            ) : (
+              leaderboard.map((p, i) => {
+                const eloVal = p.pvp_elo || p.pvpElo || 1000;
+                const rank = RANKS.find(r => eloVal >= r.min && eloVal <= r.max) || RANKS[0];
+                const w = p.pvp_wins || p.pvpWins || 0;
+                const l = p.pvp_losses || p.pvpLosses || 0;
+                const wr = w + l > 0 ? Math.round((w / (w + l)) * 100) : 0;
+                
+                return (
+                  <div key={i} className={`flex items-center justify-between p-4 border transition-all hover:bg-white/[0.03] ${i === 0 ? 'border-yellow-500/30 bg-yellow-900/5' : i === 1 ? 'border-gray-400/20 bg-gray-500/5' : i === 2 ? 'border-amber-600/20 bg-amber-900/5' : 'border-white/5'}`}>
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 flex items-center justify-center font-code font-bold text-lg ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-gray-500'}`}>
+                        {i < 3 ? ['👑', '🥈', '🥉'][i] : `#${i + 1}`}
+                      </div>
+                      <div>
+                        <div className="font-code text-sm text-white font-bold">{p.username}</div>
+                        <div className={`font-code text-[10px] ${rank.color}`}>{rank.icon} {rank.name}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-code text-sm text-white font-bold">{p.name}</div>
-                      <div className={`font-code text-[10px] ${rank.color}`}>{rank.icon} {rank.name}</div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <div className="font-code text-sm text-cyan-400 font-bold">{eloVal}</div>
+                        <div className="font-code text-[10px] text-gray-500">ELO</div>
+                      </div>
+                      <div className="text-right hidden sm:block">
+                        <div className="font-code text-xs text-gray-300">{w}W / {l}L</div>
+                        <div className="font-code text-[10px] text-gray-600">{wr}% WR</div>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <div className="font-code text-sm text-cyan-400 font-bold">{p.elo}</div>
-                      <div className="font-code text-[10px] text-gray-500">ELO</div>
-                    </div>
-                    <div className="text-right hidden sm:block">
-                      <div className="font-code text-xs text-gray-300">{p.wins}W / {p.losses}L</div>
-                      <div className="font-code text-[10px] text-gray-600">{Math.round((p.wins / (p.wins + p.losses)) * 100)}% WR</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
+            
             {/* Your position */}
             <div className="border-t border-cyan-500/15 pt-3 mt-3">
               <div className="flex items-center justify-between p-4 border border-cyan-500/30 bg-cyan-400/5">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 flex items-center justify-center font-code text-cyan-400 font-bold">#247</div>
+                  <div className="w-10 h-10 flex items-center justify-center font-code text-cyan-400 font-bold">#YOU</div>
                   <div>
-                    <div className="font-code text-sm text-cyan-400 font-bold">{agentInfo.username} (YOU)</div>
+                    <div className="font-code text-sm text-cyan-400 font-bold">{agentInfo.username}</div>
                     <div className={`font-code text-[10px] ${currentRank.color}`}>{currentRank.icon} {currentRank.name}</div>
                   </div>
                 </div>

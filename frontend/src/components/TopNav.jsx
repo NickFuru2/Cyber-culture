@@ -7,10 +7,16 @@ const TopNav = ({ toggleNav, openTerminal, openSettings, openNotifications, open
   const agentInfo = useStore(state => state.agentInfo);
   const streamerMode = useStore(state => state.streamerMode);
   const skillPoints = useStore(state => state.skillPoints);
+  const logout = useStore(state => state.logout);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
-  
+
   const displayUsername = streamerMode ? 'ANON_USER' : agentInfo.username;
+
+  const handleLogout = () => {
+    logout();
+    setProfileOpen(false);
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -90,28 +96,36 @@ const TopNav = ({ toggleNav, openTerminal, openSettings, openNotifications, open
 
                 {/* Menu Items */}
                 <div className="py-2">
-                  <Link 
-                    to="/profile" 
+                  <Link
+                    to="/profile"
                     onClick={() => setProfileOpen(false)}
                     className="flex items-center gap-3 px-4 py-2.5 hover:bg-cyan-900/30 transition-all duration-200 group"
                   >
                     <User size={15} className="text-gray-400 group-hover:text-cyan-400 transition-colors" />
                     <span className="font-code text-xs text-gray-300 group-hover:text-white transition-colors">AGENT PROFILE</span>
                   </Link>
-                  <Link 
-                    to="/inventory" 
+                  <Link
+                    to="/inventory"
                     onClick={() => setProfileOpen(false)}
                     className="flex items-center gap-3 px-4 py-2.5 hover:bg-cyan-900/30 transition-all duration-200 group"
                   >
                     <Shield size={15} className="text-gray-400 group-hover:text-cyan-400 transition-colors" />
                     <span className="font-code text-xs text-gray-300 group-hover:text-white transition-colors">INVENTORY</span>
                   </Link>
-                  <button 
+                  <button
                     onClick={() => { openSettings(); setProfileOpen(false); }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-cyan-900/30 transition-all duration-200 group"
                   >
                     <Settings size={15} className="text-gray-400 group-hover:text-cyan-400 transition-colors" />
                     <span className="font-code text-xs text-gray-300 group-hover:text-white transition-colors">SETTINGS</span>
+                  </button>
+                  <div className="border-t border-cyan-500/10 my-2"></div>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-900/30 transition-all duration-200 group"
+                  >
+                    <LogOut size={15} className="text-gray-400 group-hover:text-red-400 transition-colors" />
+                    <span className="font-code text-xs text-gray-300 group-hover:text-red-400 transition-colors">LOGOUT</span>
                   </button>
                 </div>
 

@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { Users, MessageSquare, Database, Trophy } from 'lucide-react';
+import { Users, MessageSquare } from 'lucide-react';
 
 export default function Syndicate() {
   return (

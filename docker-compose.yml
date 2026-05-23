@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - NODE_ENV=production
+      - JWT_SECRET=cyber_ops_prod_secret_2026_change_me
+      - FRONTEND_URL=http://localhost
+      - SUPABASE_URL=https://glfynsbimxchigrnmehu.supabase.co
+      - SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsZnluc2JpbXhjaGlncm5tZWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NzM5NzMsImV4cCI6MjA5NTA0OTk3M30.a-vb730qeMQnzG-THfrA1H4CcEWpbQsoXaryShkTmWo
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:4000
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always

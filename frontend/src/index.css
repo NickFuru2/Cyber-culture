@@ -2,10 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-background: #10141a;
+  --color-surface-variant: #1e222b;
+  --color-primary: #00e0ff;
+  --color-primary-fixed: #baf2ff;
+  --color-secondary-container: #c3f400;
+  --color-error: #ffb4ab;
+  --color-error-container: #93000a;
+  --color-grid: rgba(0, 224, 255, 0.04);
+}
+
+[data-theme='orange'] {
+  --color-background: #140d0a;
+  --color-surface-variant: #2b1f1a;
+  --color-primary: #ff5500;
+  --color-primary-fixed: #ffbba5;
+  --color-secondary-container: #ffa600;
+  --color-error: #ff3333;
+  --color-error-container: #930a00;
+  --color-grid: rgba(255, 85, 0, 0.04);
+}
+
+[data-theme='amber'] {
+  --color-background: #0a100d;
+  --color-surface-variant: #1a2b21;
+  --color-primary: #33ff33;
+  --color-primary-fixed: #b5ffb5;
+  --color-secondary-container: #ffcc00;
+  --color-error: #ff3333;
+  --color-error-container: #930a00;
+  --color-grid: rgba(51, 255, 51, 0.04);
+}
+
 @layer base {
   body {
-    @apply bg-background text-white font-body select-none;
-    background-image: linear-gradient(0deg, transparent 24%, rgba(0, 224, 255, 0.05) 25%, rgba(0, 224, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 224, 255, 0.05) 75%, rgba(0, 224, 255, 0.05) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(0, 224, 255, 0.05) 25%, rgba(0, 224, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 224, 255, 0.05) 75%, rgba(0, 224, 255, 0.05) 76%, transparent 77%, transparent);
+    @apply bg-background text-white font-body select-none transition-colors duration-500;
+    background-image: linear-gradient(0deg, transparent 24%, var(--color-grid) 25%, var(--color-grid) 26%, transparent 27%, transparent 74%, var(--color-grid) 75%, var(--color-grid) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, var(--color-grid) 25%, var(--color-grid) 26%, transparent 27%, transparent 74%, var(--color-grid) 75%, var(--color-grid) 76%, transparent 77%, transparent);
     background-size: 50px 50px;
     overflow-x: hidden;
   }

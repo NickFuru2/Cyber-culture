@@ -1,15 +1,22 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useStore } from '../store/useStore';
-import { Shield, Crosshair, ChevronRight, Lock, Unlock } from 'lucide-react';
+import { Shield, Crosshair, ChevronRight, Lock, Unlock, Loader2, AlertCircle, ArrowLeft, LogIn } from 'lucide-react';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 const Registration = () => {
   const register = useStore(state => state.register);
+  const setAgentData = useStore(state => state.setAgentData);
   const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [faction, setFaction] = useState(null);
   const [hoveredSide, setHoveredSide] = useState(null);
-  const [phase, setPhase] = useState('choose'); // 'choose' | 'register'
+  const [phase, setPhase] = useState('choose'); // 'choose' | 'register' | 'login'
   const [glitchText, setGlitchText] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [mode, setMode] = useState('register'); // 'register' | 'login'
 
   const whiteVideoRef = useRef(null);
   const redVideoRef = useRef(null);
@@ -62,12 +69,79 @@ const Registration = () => {
     }
 
     // Transition to register phase after a beat
-    setTimeout(() => setPhase('register'), 800);
+    setTimeout(() => {
+      setPhase('register');
+      setMode('register'); // Default to register mode
+    }, 800);
   }, []);
 
-  const handleRegister = () => {
-    if (username.trim() && faction) {
-      register(username, faction);
+  // Direct login mode — skip faction selection
+  const handleDirectLogin = useCallback(() => {
+    setPhase('login');
+    setMode('login');
+    setFaction(null);
+    setError('');
+    setUsername('');
+    setPassword('');
+  }, []);
+
+  const handleAuth = async () => {
+    if (!username.trim() || !password.trim()) {
+      setError('Username and password required');
+      return;
+    }
+
+    // For register mode, faction is required
+    if (mode === 'register' && !faction) {
+      setError('Please select a faction first');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+      const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
+      const body = mode === 'register'
+        ? { username, password, alignment: faction }
+        : { username, password };
+
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Accept HTTP-only cookie from server
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Authentication failed');
+      }
+
+      // Update store with agent data (JWT is in HTTP-only cookie, managed by server)
+      if (setAgentData) {
+        setAgentData(data.agent);
+      }
+
+      // Legacy register call for compatibility
+      register(data.agent.username, data.agent.alignment);
+
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setError('Connection timed out. Is the server running?');
+      } else if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+        setError('Cannot connect to server. Make sure backend is running on port 4000.');
+      } else {
+        setError(err.message);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -75,12 +149,16 @@ const Registration = () => {
     setPhase('choose');
     setFaction(null);
     setHoveredSide(null);
+    setError('');
+    setPassword('');
+    setUsername('');
     whiteVideoRef.current?.pause();
     redVideoRef.current?.pause();
   };
 
   // Determine expansion ratios
   const getWhiteWidth = () => {
+    if (phase === 'login') return '50%'; // Neutral when in login mode
     if (faction === 'WHITE HAT') return '70%';
     if (faction === 'BLACK HAT') return '30%';
     if (hoveredSide === 'white') return '60%';
@@ -89,6 +167,7 @@ const Registration = () => {
   };
 
   const getRedWidth = () => {
+    if (phase === 'login') return '50%'; // Neutral when in login mode
     if (faction === 'BLACK HAT') return '70%';
     if (faction === 'WHITE HAT') return '30%';
     if (hoveredSide === 'red') return '60%';
@@ -106,9 +185,9 @@ const Registration = () => {
           width: getWhiteWidth(),
           transition: 'width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         }}
-        onMouseEnter={() => handleSideHover('white')}
-        onMouseLeave={() => handleSideLeave('white')}
-        onClick={() => !faction && handleFactionSelect('white')}
+        onMouseEnter={() => phase === 'choose' && handleSideHover('white')}
+        onMouseLeave={() => phase === 'choose' && handleSideLeave('white')}
+        onClick={() => !faction && phase === 'choose' && handleFactionSelect('white')}
       >
         {/* Video Background */}
         <video
@@ -120,11 +199,13 @@ const Registration = () => {
           preload="auto"
           className="absolute inset-0 w-full h-full object-cover"
           style={{
-            filter: faction === 'BLACK HAT' 
-              ? 'brightness(0.15) saturate(0.3)' 
-              : hoveredSide === 'white' 
-                ? 'brightness(0.6) saturate(1.2)' 
-                : 'brightness(0.35) saturate(0.7)',
+            filter: phase === 'login'
+              ? 'brightness(0.2) saturate(0.3)'
+              : faction === 'BLACK HAT' 
+                ? 'brightness(0.15) saturate(0.3)' 
+                : hoveredSide === 'white' 
+                  ? 'brightness(0.6) saturate(1.2)' 
+                  : 'brightness(0.35) saturate(0.7)',
             transition: 'filter 0.6s ease',
           }}
         />
@@ -150,7 +231,7 @@ const Registration = () => {
         />
 
         {/* Content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-6">
+        <div className={`absolute inset-0 flex flex-col items-center justify-center z-10 p-6 transition-opacity duration-500 ${phase === 'login' ? 'opacity-30' : 'opacity-100'}`}>
           {/* Icon */}
           <div 
             className={`mb-6 transition-all duration-700 ${
@@ -202,7 +283,7 @@ const Registration = () => {
           </div>
 
           {/* Click prompt */}
-          {!faction && (
+          {!faction && phase === 'choose' && (
             <div className={`mt-8 font-code text-[10px] tracking-[0.3em] transition-all duration-500 ${
               hoveredSide === 'white' 
                 ? 'text-cyan-400 opacity-100 translate-y-0' 
@@ -244,7 +325,7 @@ const Registration = () => {
         {/* VS Badge */}
         <div 
           className={`absolute w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-all duration-700 ${
-            faction 
+            faction || phase === 'login'
               ? 'scale-0 opacity-0' 
               : 'scale-100 opacity-100'
           }`}
@@ -265,9 +346,9 @@ const Registration = () => {
           width: getRedWidth(),
           transition: 'width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         }}
-        onMouseEnter={() => handleSideHover('red')}
-        onMouseLeave={() => handleSideLeave('red')}
-        onClick={() => !faction && handleFactionSelect('red')}
+        onMouseEnter={() => phase === 'choose' && handleSideHover('red')}
+        onMouseLeave={() => phase === 'choose' && handleSideLeave('red')}
+        onClick={() => !faction && phase === 'choose' && handleFactionSelect('red')}
       >
         {/* Video Background */}
         <video
@@ -279,11 +360,13 @@ const Registration = () => {
           preload="auto"
           className="absolute inset-0 w-full h-full object-cover"
           style={{
-            filter: faction === 'WHITE HAT' 
-              ? 'brightness(0.15) saturate(0.3)' 
-              : hoveredSide === 'red' 
-                ? 'brightness(0.6) saturate(1.2)' 
-                : 'brightness(0.35) saturate(0.7)',
+            filter: phase === 'login'
+              ? 'brightness(0.2) saturate(0.3)'
+              : faction === 'WHITE HAT' 
+                ? 'brightness(0.15) saturate(0.3)' 
+                : hoveredSide === 'red' 
+                  ? 'brightness(0.6) saturate(1.2)' 
+                  : 'brightness(0.35) saturate(0.7)',
             transition: 'filter 0.6s ease',
           }}
         />
@@ -309,7 +392,7 @@ const Registration = () => {
         />
 
         {/* Content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-6">
+        <div className={`absolute inset-0 flex flex-col items-center justify-center z-10 p-6 transition-opacity duration-500 ${phase === 'login' ? 'opacity-30' : 'opacity-100'}`}>
           {/* Icon */}
           <div 
             className={`mb-6 transition-all duration-700 ${
@@ -361,7 +444,7 @@ const Registration = () => {
           </div>
 
           {/* Click prompt */}
-          {!faction && (
+          {!faction && phase === 'choose' && (
             <div className={`mt-8 font-code text-[10px] tracking-[0.3em] transition-all duration-500 ${
               hoveredSide === 'red' 
                 ? 'text-red-400 opacity-100 translate-y-0' 
@@ -398,7 +481,7 @@ const Registration = () => {
         />
       </div>
 
-      {/* === REGISTRATION PANEL (OVERLAY) === */}
+      {/* === REGISTRATION PANEL (OVERLAY — after faction select) === */}
       <div 
         className={`fixed inset-0 z-40 flex items-center justify-center pointer-events-none transition-all duration-700 ${
           phase === 'register' ? 'opacity-100' : 'opacity-0'
@@ -427,8 +510,8 @@ const Registration = () => {
             {/* Header */}
             <div className="text-center">
               <div className="flex items-center justify-center gap-3 mb-3">
-                {faction === 'WHITE HAT' 
-                  ? <Shield size={28} className="text-cyan-400" /> 
+                {faction === 'WHITE HAT'
+                  ? <Shield size={28} className="text-cyan-400" />
                   : <Crosshair size={28} className="text-red-500" />
                 }
                 <h1 className={`text-2xl font-h1 tracking-[0.2em] ${
@@ -439,61 +522,259 @@ const Registration = () => {
                     ? '0 0 15px rgba(0,224,255,0.6)'
                     : '0 0 15px rgba(255,0,0,0.6)',
                 }}>
-                  INITIALIZE AGENT
+                  {mode === 'register' ? 'INITIALIZE AGENT' : 'AGENT LOGIN'}
                 </h1>
               </div>
               <p className="text-gray-500 font-code text-[10px] tracking-[0.3em]">
-                FACTION: {faction || '---'} // REGISTRATION PROTOCOL V2.0
+                FACTION: {faction || '---'} // {mode === 'register' ? 'REGISTRATION' : 'AUTHENTICATION'} PROTOCOL V2.0
               </p>
             </div>
+
+            {/* Mode Toggle */}
+            <div className="flex gap-2 p-1 bg-black/60 border border-gray-700 rounded">
+              <button
+                onClick={() => { setMode('register'); setError(''); }}
+                className={`flex-1 py-2 font-code text-xs tracking-widest transition-all ${
+                  mode === 'register'
+                    ? faction === 'WHITE HAT'
+                      ? 'bg-cyan-400/20 text-cyan-400 border border-cyan-400/30'
+                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                    : 'text-gray-500 hover:text-white'
+                }`}
+              >
+                REGISTER
+              </button>
+              <button
+                onClick={() => { setMode('login'); setError(''); }}
+                className={`flex-1 py-2 font-code text-xs tracking-widest transition-all ${
+                  mode === 'login'
+                    ? faction === 'WHITE HAT'
+                      ? 'bg-cyan-400/20 text-cyan-400 border border-cyan-400/30'
+                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                    : 'text-gray-500 hover:text-white'
+                }`}
+              >
+                LOGIN
+              </button>
+            </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-900/20 border border-red-500/30 rounded text-red-400 text-xs font-code">
+                <AlertCircle size={16} className="flex-shrink-0" />
+                {error}
+              </div>
+            )}
 
             {/* Codename input */}
             <div className="flex flex-col gap-2">
               <label className={`font-code text-xs tracking-widest ${
                 faction === 'WHITE HAT' ? 'text-cyan-400/80' : 'text-red-400/80'
               }`}>
-                CHOOSE CODENAME
+                CODENAME
               </label>
-              <input 
+              <input
                 className="bg-black/60 border p-3 font-code outline-none transition-all"
                 style={{
                   borderColor: faction === 'WHITE HAT' ? 'rgba(0,224,255,0.3)' : 'rgba(255,0,0,0.3)',
                   color: faction === 'WHITE HAT' ? '#67e8f9' : '#f87171',
-                  boxShadow: username 
-                    ? faction === 'WHITE HAT' 
-                      ? '0 0 15px rgba(0,224,255,0.15)' 
+                  boxShadow: username
+                    ? faction === 'WHITE HAT'
+                      ? '0 0 15px rgba(0,224,255,0.15)'
                       : '0 0 15px rgba(255,0,0,0.15)'
                     : 'none',
                 }}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+                onKeyDown={(e) => e.key === 'Enter' && !loading && handleAuth()}
                 placeholder="e.g. Neo, Trinity..."
                 maxLength={16}
                 autoFocus
+                disabled={loading}
               />
             </div>
 
-            {/* Register button */}
-            <button 
-              onClick={handleRegister}
-              disabled={!username.trim()}
+            {/* Password input */}
+            <div className="flex flex-col gap-2">
+              <label className={`font-code text-xs tracking-widest ${
+                faction === 'WHITE HAT' ? 'text-cyan-400/80' : 'text-red-400/80'
+              }`}>
+                ACCESS KEY
+              </label>
+              <input
+                type="password"
+                className="bg-black/60 border p-3 font-code outline-none transition-all"
+                style={{
+                  borderColor: faction === 'WHITE HAT' ? 'rgba(0,224,255,0.3)' : 'rgba(255,0,0,0.3)',
+                  color: faction === 'WHITE HAT' ? '#67e8f9' : '#f87171',
+                  boxShadow: password
+                    ? faction === 'WHITE HAT'
+                      ? '0 0 15px rgba(0,224,255,0.15)'
+                      : '0 0 15px rgba(255,0,0,0.15)'
+                    : 'none',
+                }}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !loading && handleAuth()}
+                placeholder="••••••••"
+                disabled={loading}
+              />
+            </div>
+
+            {/* Auth button */}
+            <button
+              onClick={handleAuth}
+              disabled={!username.trim() || !password.trim() || loading}
               className={`mt-2 font-code font-bold py-3 tracking-widest disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 ${
                 faction === 'WHITE HAT'
                   ? 'bg-cyan-400 text-black hover:bg-cyan-300 hover:shadow-[0_0_25px_rgba(0,224,255,0.5)]'
                   : 'bg-red-500 text-black hover:bg-red-400 hover:shadow-[0_0_25px_rgba(255,0,0,0.5)]'
               }`}
             >
-              ENTER THE GRID
-              <ChevronRight size={16} />
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  AUTHENTICATING...
+                </>
+              ) : (
+                <>
+                  {mode === 'register' ? 'ENTER THE GRID' : 'ACCESS SYSTEM'}
+                  <ChevronRight size={16} />
+                </>
+              )}
             </button>
 
             {/* Back button */}
-            <button 
+            <button
               onClick={handleBack}
-              className="font-code text-[10px] text-gray-500 hover:text-white tracking-[0.2em] transition-colors text-center"
+              disabled={loading}
+              className="font-code text-[10px] text-gray-500 hover:text-white tracking-[0.2em] transition-colors text-center disabled:opacity-30 flex items-center justify-center gap-1"
             >
-              ← CHANGE FACTION
+              <ArrowLeft size={10} />
+              CHANGE FACTION
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* === LOGIN PANEL (OVERLAY — direct login without faction) === */}
+      <div 
+        className={`fixed inset-0 z-40 flex items-center justify-center pointer-events-none transition-all duration-700 ${
+          phase === 'login' ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        <div 
+          className={`relative pointer-events-auto transition-all duration-700 ${
+            phase === 'login' 
+              ? 'translate-y-0 scale-100 opacity-100' 
+              : 'translate-y-8 scale-95 opacity-0'
+          }`}
+        >
+          {/* Glass panel — neutral cyan theme */}
+          <div 
+            className="w-[420px] max-w-[90vw] p-8 flex flex-col gap-6"
+            style={{
+              background: 'rgba(10, 13, 20, 0.9)',
+              backdropFilter: 'blur(24px)',
+              WebkitBackdropFilter: 'blur(24px)',
+              border: '1px solid rgba(0,224,255,0.25)',
+              boxShadow: '0 0 60px rgba(0,224,255,0.1), inset 0 1px 0 rgba(0,224,255,0.08)',
+            }}
+          >
+            {/* Header */}
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-3 mb-3">
+                <LogIn size={28} className="text-cyan-400" />
+                <h1 className="text-2xl font-h1 tracking-[0.2em] text-cyan-400"
+                style={{
+                  textShadow: '0 0 15px rgba(0,224,255,0.6)',
+                }}>
+                  AGENT LOGIN
+                </h1>
+              </div>
+              <p className="text-gray-500 font-code text-[10px] tracking-[0.3em]">
+                AUTHENTICATION PROTOCOL V2.0 // WELCOME BACK
+              </p>
+            </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-900/20 border border-red-500/30 rounded text-red-400 text-xs font-code">
+                <AlertCircle size={16} className="flex-shrink-0" />
+                {error}
+              </div>
+            )}
+
+            {/* Codename input */}
+            <div className="flex flex-col gap-2">
+              <label className="font-code text-xs tracking-widest text-cyan-400/80">
+                CODENAME
+              </label>
+              <input
+                className="bg-black/60 border p-3 font-code outline-none transition-all"
+                style={{
+                  borderColor: 'rgba(0,224,255,0.3)',
+                  color: '#67e8f9',
+                  boxShadow: username ? '0 0 15px rgba(0,224,255,0.15)' : 'none',
+                }}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !loading && handleAuth()}
+                placeholder="e.g. Neo, Trinity..."
+                maxLength={16}
+                autoFocus
+                disabled={loading}
+              />
+            </div>
+
+            {/* Password input */}
+            <div className="flex flex-col gap-2">
+              <label className="font-code text-xs tracking-widest text-cyan-400/80">
+                ACCESS KEY
+              </label>
+              <input
+                type="password"
+                className="bg-black/60 border p-3 font-code outline-none transition-all"
+                style={{
+                  borderColor: 'rgba(0,224,255,0.3)',
+                  color: '#67e8f9',
+                  boxShadow: password ? '0 0 15px rgba(0,224,255,0.15)' : 'none',
+                }}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !loading && handleAuth()}
+                placeholder="••••••••"
+                disabled={loading}
+              />
+            </div>
+
+            {/* Login button */}
+            <button
+              onClick={handleAuth}
+              disabled={!username.trim() || !password.trim() || loading}
+              className="mt-2 font-code font-bold py-3 tracking-widest disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 bg-cyan-400 text-black hover:bg-cyan-300 hover:shadow-[0_0_25px_rgba(0,224,255,0.5)]"
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  AUTHENTICATING...
+                </>
+              ) : (
+                <>
+                  ACCESS SYSTEM
+                  <ChevronRight size={16} />
+                </>
+              )}
+            </button>
+
+            {/* Back button */}
+            <button
+              onClick={handleBack}
+              disabled={loading}
+              className="font-code text-[10px] text-gray-500 hover:text-white tracking-[0.2em] transition-colors text-center disabled:opacity-30 flex items-center justify-center gap-1"
+            >
+              <ArrowLeft size={10} />
+              BACK TO FACTION SELECT
             </button>
           </div>
         </div>
@@ -510,6 +791,18 @@ const Registration = () => {
             <div>SYS.AUTH_GATEWAY v2.0</div>
             <div className="mt-1">UPLINK: <span className="text-green-500">ACTIVE</span></div>
           </div>
+          
+          {/* Login button in bottom center — visible only in 'choose' phase */}
+          {phase === 'choose' && (
+            <button
+              onClick={handleDirectLogin}
+              className="pointer-events-auto font-code text-[11px] text-cyan-400/70 hover:text-cyan-300 tracking-[0.15em] transition-all duration-300 flex items-center gap-2 bg-cyan-400/5 hover:bg-cyan-400/15 border border-cyan-400/20 hover:border-cyan-400/50 px-5 py-2.5 hover:shadow-[0_0_20px_rgba(0,224,255,0.2)] group"
+            >
+              <LogIn size={14} className="group-hover:scale-110 transition-transform" />
+              ALREADY AN AGENT? LOGIN
+            </button>
+          )}
+
           <div className="font-code text-[9px] text-gray-600 tracking-widest text-right">
             <div>CYBER-OPS PLATFORM</div>
             <div className="mt-1">NODES ONLINE: <span className="text-cyan-400">1,337</span></div>
@@ -522,7 +815,7 @@ const Registration = () => {
         <div className="h-20 bg-gradient-to-b from-black/60 to-transparent" />
         <div className="absolute top-0 left-0 right-0 flex justify-center pt-5">
           <div className="font-code text-[10px] text-gray-500 tracking-[0.4em]">
-            SELECT YOUR ALLEGIANCE
+            {phase === 'login' ? 'AGENT AUTHENTICATION' : 'SELECT YOUR ALLEGIANCE'}
           </div>
         </div>
       </div>

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Terminal, Shield, Crosshair, User, Settings, Bell, Database, Globe, Users, Menu, MonitorPlay, MessageSquare, LayoutDashboard, Box, Target, AlertTriangle, Plus, Coins, Gem, CreditCard, CheckCircle, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Settings, Bell, MessageSquare, Plus, Gem, CreditCard, CheckCircle, Loader2 } from 'lucide-react';
 import { useStore } from './store/useStore';
-
+import { playSound } from './utils/audio';
 import Dashboard from './pages/Dashboard';
 import Landing from './pages/Landing';
 import Missions from './pages/Missions';
@@ -15,13 +15,11 @@ import Syndicate from './pages/Syndicate';
 import Raids from './pages/Raids';
 import Textbooks from './pages/Textbooks';
 import PvP from './pages/PvP';
-
 import TopNav from './components/TopNav';
 import SideNav from './components/SideNav';
 import CommandPalette from './components/CommandPalette';
 import Registration from './components/Registration';
 import PageTransition from './components/PageTransition';
-
 
 function App() {
   const [booted, setBooted] = useState(false);
@@ -33,8 +31,12 @@ function App() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [checkoutState, setCheckoutState] = useState('idle');
-  
+  const [loading, setLoading] = useState(true);
+
   const isLoggedIn = useStore(state => state.isLoggedIn);
+  const loadAgentProfile = useStore(state => state.loadAgentProfile);
+  const loadError = useStore(state => state.loadError);
+  const clearLoadError = useStore(state => state.clearLoadError);
   const language = useStore(state => state.language);
   const setLanguage = useStore(state => state.setLanguage);
   const streamerMode = useStore(state => state.streamerMode);
@@ -42,29 +44,133 @@ function App() {
   const addPremiumCredits = useStore(state => state.addPremiumCredits);
   const agentInfo = useStore(state => state.agentInfo);
 
+  // Dynamic customization
+  const soundFxEnabled = useStore(state => state.soundFxEnabled);
+  const toggleSoundFx = useStore(state => state.toggleSoundFx);
+  const theme = useStore(state => state.theme);
+  const setTheme = useStore(state => state.setTheme);
+
+  // MMO Chat Integration
+  const chatMessages = useStore(state => state.chatMessages);
+  const loadChatMessages = useStore(state => state.loadChatMessages);
+  const sendChatMessage = useStore(state => state.sendChatMessage);
+
+  // Check for existing session on mount (cookie-based, no localStorage)
+  useEffect(() => {
+    const checkAuth = async () => {
+      await loadAgentProfile();
+      setLoading(false);
+    };
+    checkAuth();
+  }, [loadAgentProfile]);
+
+  // Skip booted screen for logged-in agents
+  useEffect(() => {
+    if (isLoggedIn) {
+      setBooted(true);
+    }
+  }, [isLoggedIn]);
+
+  // Play boot sound
+  useEffect(() => {
+    if (booted) {
+      playSound.boot();
+    }
+  }, [booted]);
+
+  // Poll global chat messages every 4 seconds when terminal is open
+  useEffect(() => {
+    if (terminalOpen && isLoggedIn) {
+      loadChatMessages('global');
+      const interval = setInterval(() => {
+        loadChatMessages('global');
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [terminalOpen, isLoggedIn, loadChatMessages]);
+
   // Terminal Chat State
-  const [chatLog, setChatLog] = useState([{ sender: 'system', msg: 'HACKER COMMLINK SECURED. TYPE /HELP.' }]);
   const [chatInput, setChatInput] = useState('');
   const chatRef = useRef(null);
 
-  useEffect(() => { chatRef.current?.scrollIntoView(); }, [chatLog]);
+  useEffect(() => { chatRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
-  const handleChat = (e) => {
+  const handleChat = async (e) => {
     if (e.key === 'Enter' && chatInput.trim()) {
       const msg = chatInput.trim();
-      setChatLog(prev => [...prev, { sender: 'you', msg }]);
       setChatInput('');
       
-      setTimeout(() => {
-        if (msg === '/help') setChatLog(prev => [...prev, { sender: 'system', msg: 'Try: /scan, /ping, /joke' }]);
-        else if (msg === '/scan') setChatLog(prev => [...prev, { sender: 'system', msg: 'SCANNING... No threats found in sector.' }]);
-        else if (msg === '/ping') setChatLog(prev => [...prev, { sender: 'system', msg: 'PONG 12ms' }]);
-        else setChatLog(prev => [...prev, { sender: 'agent_x', msg: 'Copy that.' }]);
-      }, 600);
+      // Play confirm sound on send
+      playSound.confirm();
+
+      // Send chat to server
+      await sendChatMessage('global', msg);
     }
   };
 
 
+  if (loading) {
+    return (
+      <div className="h-screen w-screen bg-black flex flex-col items-center justify-center">
+        <div className="text-primary font-code text-4xl animate-pulse font-bold drop-shadow-[0_0_15px_rgba(0,224,255,0.8)]">LOADING...</div>
+        <div className="text-gray-500 font-code mt-4 tracking-widest">[ ESTABLISHING SECURE CONNECTION ]</div>
+      </div>
+    );
+  }
+
+  if (loadError && (loadError === 'BACKEND_OFFLINE' || loadError === 'CONNECTION_TIMEOUT')) {
+    return (
+      <div className="h-screen w-screen bg-black flex flex-col items-center justify-center p-6">
+        <div className="border border-red-500/50 bg-red-950/20 p-8 rounded-lg max-w-md w-full shadow-[0_0_50px_rgba(239,68,68,0.25)] text-center font-code relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 via-transparent to-red-500"></div>
+          
+          <div className="w-16 h-16 mx-auto mb-6 rounded-full border border-red-500/50 flex items-center justify-center bg-red-950/40 animate-pulse text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]">
+            <span className="text-3xl font-bold font-mono">!</span>
+          </div>
+
+          <h2 className="text-2xl font-black tracking-widest text-red-500 mb-2 uppercase">UPLINK SEVERED</h2>
+          <p className="text-xs text-red-400/80 mb-6 tracking-wide">
+            {loadError === 'BACKEND_OFFLINE' 
+              ? 'CRITICAL ERROR: TARGET SYSTEM HOST IS OFFLINE' 
+              : 'CRITICAL ERROR: UPLINK CONNECTION TIMEOUT'}
+          </p>
+
+          <div className="bg-black/60 border border-red-900/40 p-4 rounded text-left text-[11px] text-gray-400 mb-6 space-y-2 leading-relaxed">
+            <div className="flex justify-between border-b border-red-950/30 pb-1">
+              <span>ERR_CODE:</span>
+              <span className="text-red-400 font-bold">{loadError}</span>
+            </div>
+            <div>
+              Unable to establish secure handshake with core mainframe. Please verify that the backend process is running and accessible on port 4000.
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <button 
+              onClick={async () => {
+                clearLoadError();
+                setLoading(true);
+                await loadAgentProfile();
+                setLoading(false);
+              }}
+              className="flex-1 bg-red-500 hover:bg-red-400 text-black font-black py-3 rounded tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-xs"
+            >
+              RE-INITIALIZE
+            </button>
+            <button 
+              onClick={() => {
+                clearLoadError();
+                useStore.setState({ isLoggedIn: false });
+              }}
+              className="flex-1 border border-red-500/30 hover:border-red-500 text-red-400 font-bold py-3 rounded tracking-widest transition-colors cursor-pointer text-xs"
+            >
+              BYPASS AUTH
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!booted) {
     return (
@@ -112,16 +218,33 @@ function App() {
                 <button onClick={() => setTerminalOpen(false)} className="hover:text-error">X</button>
              </div>
              <div className="flex-1 p-3 overflow-y-auto font-code text-[10px] space-y-2 custom-scrollbar">
-                {chatLog.map((log, i) => (
-                  <div key={i} className={log.sender === 'system' ? 'text-secondary-container' : log.sender === 'you' ? 'text-white' : 'text-cyan-400'}>
-                    <span className="opacity-50">[{log.sender}] </span>{log.msg}
-                  </div>
-                ))}
+                {chatMessages.length === 0 ? (
+                  <div className="text-gray-500 italic">[ UPLINK ESTABLISHED. NO MESSAGES IN CHANNEL. ]</div>
+                ) : (
+                  chatMessages.map((msg, i) => {
+                    const isMe = msg.username === agentInfo.username;
+                    return (
+                      <div key={i} className={isMe ? 'text-white' : 'text-cyan-400'}>
+                        <span className="opacity-55">[{msg.username}]</span> {msg.message}
+                      </div>
+                    );
+                  })
+                )}
                 <div ref={chatRef}/>
              </div>
              <div className="p-2 border-t border-cyan-500/30 flex bg-black">
                 <span className="font-code text-cyan-400 text-xs mr-2">{'>'}</span>
-                <input autoFocus value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={handleChat} className="bg-transparent flex-1 text-white text-xs font-code outline-none border-none" placeholder="Type command..." />
+                <input 
+                  autoFocus 
+                  value={chatInput} 
+                  onChange={e=>setChatInput(e.target.value)} 
+                  onKeyDown={e => { 
+                    playSound.typewriter(); 
+                    handleChat(e); 
+                  }} 
+                  className="bg-transparent flex-1 text-white text-xs font-code outline-none border-none" 
+                  placeholder="Broadcast message to grid..." 
+                />
              </div>
           </div>
         )}
@@ -173,9 +296,18 @@ function App() {
                    <div>
                      <div className="text-gray-400 text-xs mb-2">UI THEME / HUE</div>
                      <div className="flex gap-2">
-                       <button className="w-8 h-8 bg-cyan-400 border-2 border-white"></button>
-                       <button className="w-8 h-8 bg-error border-2 border-transparent"></button>
-                       <button className="w-8 h-8 bg-secondary-container border-2 border-transparent"></button>
+                       <button 
+                         onClick={() => { setTheme('cyan'); playSound.click(); }} 
+                         className={`w-8 h-8 bg-cyan-400 border-2 ${theme === 'cyan' ? 'border-white scale-110' : 'border-transparent opacity-70'} transition-all`}
+                       ></button>
+                       <button 
+                         onClick={() => { setTheme('orange'); playSound.click(); }} 
+                         className={`w-8 h-8 bg-red-500 border-2 ${theme === 'orange' ? 'border-white scale-110' : 'border-transparent opacity-70'} transition-all`}
+                       ></button>
+                       <button 
+                         onClick={() => { setTheme('amber'); playSound.click(); }} 
+                         className={`w-8 h-8 bg-secondary-container border-2 ${theme === 'amber' ? 'border-white scale-110' : 'border-transparent opacity-70'} transition-all`}
+                       ></button>
                      </div>
                    </div>
                    <div className="flex items-center justify-between p-3 border border-surface-variant bg-black/50">
@@ -184,7 +316,7 @@ function App() {
                        <div className="text-gray-500 text-[9px] mt-1 max-w-[200px]">Hides your IP and Agent Name to prevent DOXing during live broadcasts.</div>
                      </div>
                      <div 
-                       onClick={toggleStreamerMode}
+                       onClick={() => { toggleStreamerMode(); playSound.click(); }}
                        className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${streamerMode ? 'bg-cyan-500' : 'bg-gray-700'}`}
                      >
                        <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${streamerMode ? 'translate-x-6' : 'translate-x-0'}`}></div>
@@ -192,7 +324,12 @@ function App() {
                    </div>
                    <div className="flex items-center justify-between p-3 border border-surface-variant bg-black/50">
                      <div className="text-gray-400 text-xs">TERMINAL SOUND FX</div>
-                     <input type="checkbox" className="w-4 h-4" defaultChecked />
+                     <input 
+                       type="checkbox" 
+                       className="w-4 h-4 cursor-pointer" 
+                       checked={soundFxEnabled} 
+                       onChange={() => { toggleSoundFx(); playSound.click(); }} 
+                     />
                    </div>
                 </div>
              </div>

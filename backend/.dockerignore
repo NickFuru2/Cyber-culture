@@ -1,0 +1,10 @@
+node_modules
+.env
+.git
+.gitignore
+cyber_ops.db
+cyber_ops.db-shm
+cyber_ops.db-wal
+Dockerfile
+.dockerignore
+npm-debug.log

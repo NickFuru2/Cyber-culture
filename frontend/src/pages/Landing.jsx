@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Power, Terminal, Shield, Crosshair, Zap, Globe, Users, Target, Award, ChevronRight, Activity, Lock, Eye, Cpu, Database, Radio, ArrowRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Power, Terminal, Shield, Crosshair, Zap, Globe, Users, Target, ChevronRight, Activity, Lock, Eye, Cpu, ArrowRight, Radio } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 
